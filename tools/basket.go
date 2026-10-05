@@ -363,8 +363,8 @@ func registerRemoveFromShoppingList(s *server.MCPServer, deps Deps) {
 		// the AH API's request deserializer rejects the body with a 400 "Failed to
 		// read request" if strikeThrough is omitted or description is left unset.
 		type removeItem struct {
-			Description   string `json:"description"`
 			ProductID     int    `json:"productId,omitempty"`
+			Description   string `json:"description"`
 			Quantity      int    `json:"quantity"`
 			Type          string `json:"type"`
 			OriginCode    string `json:"originCode"`
@@ -375,16 +375,30 @@ func registerRemoveFromShoppingList(s *server.MCPServer, deps Deps) {
 			pid := it.ProductDetails.Product.WebshopID
 			desc := strings.ToLower(it.Description)
 			if removeByProductID[pid] || removeByName[desc] {
+				// The v2 PATCH endpoint rejects items with empty type/originCode
+				// ("400 Failed to read request") — the GET response does not echo
+				// these fields, so default them to the values AddToShoppingList
+				// writes (type SHOPPABLE, originCode PRD) and fall back to the
+				// product title when description is empty.
 				oc := it.OriginCode
 				if oc == "" {
 					oc = "PRD"
 				}
+				ty := it.Type
+				if ty == "" {
+					ty = "SHOPPABLE"
+				}
+				d := it.Description
+				if d == "" {
+					d = it.ProductDetails.Product.Title
+				}
 				removeItems = append(removeItems, removeItem{
-					ProductID:   pid,
-					Description: it.Description,
-					Quantity:    0,
-					Type:        it.Type,
-					OriginCode:  oc,
+					ProductID:     pid,
+					Description:   d,
+					Quantity:      0,
+					Type:          ty,
+					OriginCode:    oc,
+					StrikeThrough: false,
 				})
 			}
 		}
@@ -491,7 +505,8 @@ func registerClearShoppingList(s *server.MCPServer, deps Deps) {
 			Description string `json:"description"`
 			ProductDetails struct {
 				Product struct {
-					WebshopID int `json:"webshopId"`
+					WebshopID int    `json:"webshopId"`
+					Title     string `json:"title"`
 				} `json:"product"`
 			} `json:"productDetails"`
 		}
@@ -506,8 +521,8 @@ func registerClearShoppingList(s *server.MCPServer, deps Deps) {
 			return mcp.NewToolResultText("Shopping list is already empty."), nil
 		}
 		type zeroItem struct {
-			Description   string `json:"description"`
 			ProductID     int    `json:"productId,omitempty"`
+			Description   string `json:"description"`
 			Quantity      int    `json:"quantity"`
 			Type          string `json:"type"`
 			OriginCode    string `json:"originCode"`
@@ -515,12 +530,27 @@ func registerClearShoppingList(s *server.MCPServer, deps Deps) {
 		}
 		zeros := make([]zeroItem, 0, len(current.Items))
 		for _, it := range current.Items {
+			// Same empty-field defaults as ah_remove_from_shopping_list — the
+			// v2 PATCH endpoint 400s on empty type/originCode.
+			oc := it.OriginCode
+			if oc == "" {
+				oc = "PRD"
+			}
+			ty := it.Type
+			if ty == "" {
+				ty = "SHOPPABLE"
+			}
+			d := it.Description
+			if d == "" {
+				d = it.ProductDetails.Product.Title
+			}
 			zeros = append(zeros, zeroItem{
-				ProductID:   it.ProductDetails.Product.WebshopID,
-				Description: it.Description,
-				Quantity:    0,
-				Type:        it.Type,
-				OriginCode:  it.OriginCode,
+				ProductID:     it.ProductDetails.Product.WebshopID,
+				Description:   d,
+				Quantity:      0,
+				Type:          ty,
+				OriginCode:    oc,
+				StrikeThrough: false,
 			})
 		}
 		if err := c.DoRequest(ctx, "PATCH", "/mobile-services/shoppinglist/v2/items", map[string]any{"items": zeros}, nil); err != nil {
