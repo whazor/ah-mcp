@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	appie "github.com/gwillem/appie-go"
@@ -170,7 +172,11 @@ func getBonusProductsForPeriod(ctx context.Context, c *appie.Client, period bonu
 
 func getBonusSectionForDate(ctx context.Context, c *appie.Client, category, date string) ([]appie.Product, error) {
 	params := url.Values{}
-	params.Set("application", "AHWEBSHOP")
+	application := "AHWEBSHOP"
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("AH_SITE")), "be") {
+		application = "AHBEWEBSHOP"
+	}
+	params.Set("application", application)
 	params.Set("date", date)
 	params.Set("promotionType", "NATIONAL")
 	params.Set("category", category)
