@@ -3,7 +3,7 @@ module github.com/mrserzhan/ah-mcp
 go 1.23.0
 
 require (
-	github.com/gwillem/appie-go v0.0.13-0.20260913205418-c8d8b8ac100e
+	github.com/gwillem/appie-go v0.0.13-0.20260923073138-65f41abdeaff
 	github.com/mark3labs/mcp-go v0.45.0
 )
 

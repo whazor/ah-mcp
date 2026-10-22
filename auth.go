@@ -21,11 +21,11 @@ import (
 )
 
 const (
-	defaultAHSite    = "nl"
-	ahClientVersion  = "9.28"
-	ahUserAgent      = "Appie/9.28 (iPhone17,3; iPhone; CPU OS 26_1 like Mac OS X)"
-	oauthTimeout     = 5 * time.Minute
-	tokenRefreshBuf  = 60 * time.Second
+	defaultAHSite   = "nl"
+	ahClientVersion = "9.28"
+	ahUserAgent     = "Appie/9.28 (iPhone17,3; iPhone; CPU OS 26_1 like Mac OS X)"
+	oauthTimeout    = 5 * time.Minute
+	tokenRefreshBuf = 60 * time.Second
 
 	loginSuccessHTML = `<!DOCTYPE html>
 <html><head><title>Login Successful</title></head>
@@ -220,6 +220,16 @@ func StartOAuthFlow(ctx context.Context, callbackHost string, callbackPort int, 
 		io.WriteString(w, loginSuccessHTML)
 	})
 
+	// Direct login requires a browser handler to forward the appie:// code
+	// to /callback.
+	directLoginURL := fmt.Sprintf(
+		"%s/login?client_id=%s&response_type=code&redirect_uri=appie://login-exit",
+		ahLoginBase(), ahClientID(),
+	)
+	mux.HandleFunc("/start", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, directLoginURL, http.StatusFound)
+	})
+
 	proxy := &httputil.ReverseProxy{
 		Director: func(req *http.Request) {
 			req.URL.Scheme = target.Scheme
@@ -253,6 +263,9 @@ func StartOAuthFlow(ctx context.Context, callbackHost string, callbackPort int, 
 		"%s/login?client_id=%s&response_type=code&redirect_uri=appie://login-exit",
 		callbackHost, ahClientID(),
 	)
+	if os.Getenv("AH_LOGIN_START") == "true" {
+		loginURL = strings.TrimRight(callbackHost, "/") + "/start"
+	}
 	tools.LogInfo("auth", "oauth_login_url site=%s client_id=%s login_base=%s login_url=%s", ahSite(), ahClientID(), ahLoginBase(), loginURL)
 
 	// Wait for the code, exchange it, save tokens — all in background.
